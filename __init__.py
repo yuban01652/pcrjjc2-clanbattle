@@ -26,6 +26,7 @@ from hoshino import util
 import datetime
 import sqlite3
 from .aiorequests import get
+from .yobot import generate_name2qq, report_process
 sv_help = '''
 [游戏内会战推送] 无描述
 '''.strip()
@@ -150,7 +151,8 @@ async def captchaVerifier(gt, challenge, userid):
     if acinfo['admin'] == 0:
         bot.logger.error('captcha is required while admin qq is not set, so the login can\'t continue')
     else:
-        url = f"链接头：https://cc004.github.io/geetest/geetest.html\n链接：?captcha_type=1&challenge={challenge}&gt={gt}&userid={userid}&gs=1"
+        # url = f"链接头：https://cc004.github.io/geetest/geetest.html\n链接：?captcha_type=1&challenge={challenge}&gt={gt}&userid={userid}&gs=1"
+        url = f"https://cc004.github.io/geetest/geetest.html?captcha_type=1&challenge={challenge}&gt={gt}&userid={userid}&gs=1"
         if int(acinfo["captcha_group"]) != 0:
             await bot.send_group_msg(group_id = acinfo["captcha_group"],message = f'pcr账号登录需要验证码，请完成以下链接中的验证内容后将第一行validate=后面的内容复制，并用指令/pcrvalclan xxxx将内容发送给机器人完成验证\n为避免tx网页安全验证使验证码过期，请手动拼接链接头和链接：{url}\n※注意：请私聊BOT发送')
         else:
@@ -231,7 +233,7 @@ max_chat_list = 20
 health_list = [[6000000,8000000,10000000,12000000,15000000],[6000000,8000000,10000000,12000000,15000000],[12000000,14000000,17000000,19000000,22000000],[19000000,20000000,23000000,25000000,27000000],[85000000,90000000,95000000,100000000,110000000]]
 
 
-@sv.scheduled_job('interval', seconds=20)
+@sv.scheduled_job('interval', seconds=60)
 async def teafak():
     global coin,arrow_rec,side,curr_side,arrow,sw,pre_push,fnum,forward_group_list,boss_status,in_game,tvid,experimental,renew_coin
     try:
@@ -395,6 +397,36 @@ async def teafak():
                         file.write(str(output)+'\n')
                         file.close()
 
+                    challenge_item = {}
+                    if name in name2qq:
+                        challenge_item['qqid'] = name2qq[name]
+                    else:
+                        msg = f'找不到以下游戏成员对应的QQ号码:\n{name}'
+                        await bot.send_group_msg(group_id = forward_group_list[0], message = msg)
+                        sw = 0
+                        return
+                    challenge_item['lap_num'] = lap
+                    challenge_item['boss'] = boss - 1
+                    challenge_item['damage'] = damage
+                    challenge_item['kill'] = kill
+                    challenge_item['datetime'] = ctime
+                    if start_time == 90:
+                        challenge_item['reimburse'] = 0
+                    else:
+                        challenge_item['reimburse'] = 1
+                    ret = await report_process(bot, str(forward_group_list[0]), challenge_item)
+                    if ret != 0:
+                        sw = 0
+                        arrow = 0
+                        return
+
+            challenge_item['finish'] = 1
+            ret = await report_process(bot, str(forward_group_list[0]), challenge_item)
+            if ret != 0:
+                sw = 0
+                arrow = 0
+                return
+
     #记录实战人数变动并推送
             change = False
             for num in range(0,5):  
@@ -425,8 +457,8 @@ async def teafak():
             if msg != '':
                 if len(msg)>200:
                     msg = '...\n' + msg[-200:] 
-                for forward_group in forward_group_list:
-                    await bot.send_group_msg(group_id = forward_group,message = msg)
+                # for forward_group in forward_group_list:
+                #     await bot.send_group_msg(group_id = forward_group,message = msg)
         else:
             print('error')
     except Exception as e:
@@ -465,7 +497,8 @@ async def sw_pus(bot , ev):
 
 @sv.on_fullmatch('初始化会战推送')  #会战前一天输入这个
 async def sw_pus(bot , ev):
-    global swa
+    global swa,name2qq,forward_group_list
+    ret, name2qq = await generate_name2qq(str(forward_group_list[0]))
     date = datetime.date.today()
     dyear = date.year
     dmonth = date.month
@@ -1271,7 +1304,7 @@ async def rank_and_status():
             
         
     if swa == 1:
-        sw = 1
+        # sw = 1
         swa = 0
 
 
